@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>一座校园的诞生 · 福州软件职业技术学院</title>
+<style>
+  html,body{margin:0;padding:0;background:#000;overflow:hidden;width:100%;height:100%}
+  canvas{display:block}
+  #ui{position:absolute;inset:0;pointer-events:none;font-family:"Noto Sans SC","Microsoft YaHei",sans-serif;color:#fff}
+  .serif{font-family:"Noto Serif SC","Source Han Serif SC","SimSun",serif}
+  .fade{opacity:0}
+  #title{position:absolute;left:0;right:0;top:395px;text-align:center}
+  #title .big{font-size:96px;font-weight:700;letter-spacing:22px;text-shadow:0 4px 30px rgba(0,0,0,.45)}
+  #title .en{margin-top:26px;font-size:18px;letter-spacing:8px;opacity:.7;font-family:Georgia,serif}
+  #caption{position:absolute;left:150px;bottom:150px;font-size:34px;letter-spacing:6px;text-shadow:0 2px 14px rgba(0,0,0,.6)}
+  #caption small{display:block;font-size:17px;letter-spacing:4px;opacity:.75;margin-top:8px;font-family:Georgia,serif}
+  #counter{position:absolute;left:0;right:0;top:360px;text-align:center}
+  #counter .n{font-size:200px;font-weight:300;letter-spacing:6px;font-variant-numeric:tabular-nums;font-family:"Bahnschrift","DIN Alternate","Noto Sans SC",sans-serif;text-shadow:0 4px 40px rgba(0,0,0,.5)}
+  #counter .l{font-size:30px;letter-spacing:16px;margin-top:-8px;opacity:.9}
+  #chapter{position:absolute;left:150px;top:330px}
+  #chapter .no{font-size:24px;letter-spacing:6px;color:#f3c873;font-family:"Bahnschrift",sans-serif}
+  #chapter .zh{font-size:78px;font-weight:700;letter-spacing:14px;margin-top:6px;text-shadow:0 4px 26px rgba(0,0,0,.5)}
+  #chapter .en{font-size:20px;letter-spacing:9px;opacity:.75;margin-top:4px;font-family:Georgia,serif}
+  #chapter .bar{width:0;height:3px;background:#f3c873;margin-top:20px}
+  #hudL{position:absolute;left:60px;bottom:30px;height:46px;display:flex;align-items:center;gap:18px;font-size:22px;letter-spacing:4px}
+  #hudL .no{color:#f3c873;font-family:"Bahnschrift",sans-serif}
+  #hudL .en{font-size:14px;opacity:.6;letter-spacing:3px;font-family:Georgia,serif}
+  #hudR{position:absolute;right:60px;bottom:24px;text-align:right;font-variant-numeric:tabular-nums}
+  #hudR .d{font-size:34px;font-family:"Bahnschrift",sans-serif;letter-spacing:2px}
+  #hudR .d b{color:#f3c873;font-weight:600}
+  #hudR .d span{opacity:.55;font-size:22px}
+  #hudR .m{font-size:15px;opacity:.75;letter-spacing:3px;margin-top:2px}
+  #prog{position:absolute;left:60px;right:60px;bottom:16px;height:2px;background:rgba(255,255,255,.15)}
+  #prog div{height:100%;background:#f3c873;width:0}
+  #weather{position:absolute;right:60px;top:36px;font-size:16px;letter-spacing:4px;opacity:.75}
+  #big666{position:absolute;left:0;right:0;top:330px;text-align:center}
+  #big666 .n{font-size:230px;font-weight:200;letter-spacing:10px;font-family:"Bahnschrift",sans-serif;text-shadow:0 6px 50px rgba(0,0,0,.5)}
+  #big666 .l{font-size:34px;letter-spacing:22px;margin-top:-10px}
+  #slogan{position:absolute;right:150px;top:300px;writing-mode:vertical-rl;font-size:40px;letter-spacing:16px;text-shadow:0 2px 20px rgba(0,0,0,.6)}
+</style>
+<script type="importmap">
+{ "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="ui">
+  <div id="weather" class="fade"></div>
+  <div id="title" class="fade serif"><div class="big">一座校园的诞生</div><div class="en">THE MAKING OF A CAMPUS</div></div>
+  <div id="caption" class="fade serif"></div>
+  <div id="slogan" class="fade serif"></div>
+  <div id="counter" class="fade"><div class="n">999</div><div class="l serif">它用了 999 天</div></div>
+  <div id="chapter" class="fade serif"><div class="no"></div><div class="zh"></div><div class="en"></div><div class="bar"></div></div>
+  <div id="hudL" class="fade serif"><span class="no"></span><span class="zh"></span><span class="en"></span></div>
+  <div id="hudR" class="fade"><div class="d"><b>001</b><span> / 999 天</span></div><div class="m"></div></div>
+  <div id="prog" class="fade"><div></div></div>
+  <div id="big666" class="fade serif"><div class="n">999</div><div class="l">天</div></div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
+
