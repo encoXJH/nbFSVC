@@ -1,4 +1,4 @@
-﻿// Campus layout traced from the 1920x1080 satellite crop (0.58 m per px).
+// Campus layout traced from the 1920x1080 satellite crop (0.58 m per px).
 // Satellite-pixel coordinates are converted to metres with the teaching
 // building centre at the origin, +x east, +z south.
 export const MPP = 0.58;
@@ -46,9 +46,10 @@ add({ id: 'tb_gate', name: '正门', ...TB, floors: 6, style: 'gate', parts: [R(
 
 // ---------------- West zone ----------------
 const DORM = { style: 'dorm', floors: 9, gf: 4.5, fh: 3.1, sched: B2, group: 'west' };
+const NORTH_DORM = { ...DORM, style: 'castle', floors: 7 };
 [[418, 30], [388, 113], [352, 200], [322, 287]].forEach(([x, y], i) =>
-  add({ id: `dorm_nw${i}`, name: '宿舍楼', ...DORM, parts: [C(x, y, 112, 30, 22)], cranes: [[ux(x) + 22, uz(y) - 24]] }));
-add({ id: 'dorm_row', name: '宿舍楼', ...DORM, parts: [R(240, 366, 362, 402), R(368, 366, 490, 402)],
+  add({ id: `dorm_nw${i}`, name: '宿舍楼', ...NORTH_DORM, parts: [C(x, y, 112, 30, 22)], cranes: [[ux(x) + 22, uz(y) - 24]] }));
+add({ id: 'dorm_row', name: '宿舍楼', ...NORTH_DORM, parts: [R(240, 366, 362, 402), R(368, 366, 490, 402)],
   cranes: [[ux(300), uz(352)], [ux(430), uz(352)]] });
 add({ id: 'dorm_aux1', ...DORM, floors: 4, parts: [R(452, 158, 500, 196)] });
 add({ id: 'dorm_aux2', ...DORM, floors: 4, parts: [R(500, 222, 540, 256)] });

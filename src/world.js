@@ -665,6 +665,8 @@ export async function createTrees(satUrl) {
   rr(SITE.moatRing.outer, 8, SITE.moatRing.outer.r);
   SITE.parking.forEach((p) => rr(p, 4));
   SITE.stone && (mg.beginPath(), mg.arc(SITE.stone.x, SITE.stone.y, 14, 0, Math.PI * 2), mg.fill());
+  // 校门及牌匾前方保持净空，避免树冠遮挡入口视线。
+  rr({ x0: SITE.schoolGate.x - 95, y0: SITE.schoolGate.y - 8, x1: SITE.schoolGate.x + 95, y1: SITE.schoolGate.y + 115 }, 0, 6);
   for (const [x, y, r] of SITE.roundPlay) { mg.beginPath(); mg.arc(x, y, r + 6, 0, Math.PI * 2); mg.fill(); }
   mg.beginPath(); mg.arc(SITE.flag.x, SITE.flag.y, 16, 0, Math.PI * 2); mg.fill();
   mg.lineCap = 'round';

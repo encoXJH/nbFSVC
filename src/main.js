@@ -4,7 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { setupControls } from './controls.js';
 import { BUILDINGS } from './layout.js';
 import { buildSiteCanvases, createGround, createSky, createSea, createHills, createTown, createTrees, createRain, MAX_PITS } from './world.js';
 import { createConstruction } from './construction.js';
@@ -28,7 +28,7 @@ document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0xbfd0dd, 0.0008);
-const camera = new THREE.PerspectiveCamera(42, W / H, 1, 20000);
+const camera = new THREE.PerspectiveCamera(50, W / H, 1, 9000);
 
 const U = {
   day: { value: 0 }, wet: { value: 0 }, rain: { value: 0 }, night: { value: 0 }, time: { value: 0 }, cloud: { value: 0.3 }, stars: { value: 0 },
@@ -50,7 +50,7 @@ const siteLights = [[-60, 40, 120], [80, 40, -100], [-250, 40, 0], [300, 40, -50
   const l = new THREE.PointLight(0xffd7a0, 0, 380, 1.2); l.position.set(x, y, z); scene.add(l); return l;
 });
 
-let ready = false;
+let ready = false, viewerReady = false;
 let constr, trees, rain, sky, panoTex;
 
 async function init() {
@@ -247,7 +247,7 @@ function updateHUD(t, env) {
 
 // ----------------------------------------------------------- frame
 const tmpV = new THREE.Vector3();
-function renderAt(t, updateCamera = true) {
+function renderAt(t, updateCamera = true, updateEnvironment = true, usePostProcessing = updateEnvironment) {
   if (!ready) return false;
   const env = Object.assign(TL.envAt(t), window.envOverride || {});
   const { day, tod, cloud, rain: rainK, wet, fog } = env;
@@ -286,8 +286,10 @@ function renderAt(t, updateCamera = true) {
   scene.fog.density = fog + rainK * 0.001;
   renderer.toneMappingExposure = lerp(1.0, 1.55, night) * lerp(1, 1.12, ov);
 
-  constr.update(day, t, { night });
-  trees.userData.update(day, t);
+  if (updateEnvironment) {
+    constr.update(day, t, { night });
+    trees.userData.update(day, t);
+  }
 
   if (updateCamera) {
     const cam = window.camOverride ? { ...window.camOverride, pos: v3(window.camOverride.pos), tgt: v3(window.camOverride.tgt) } : sampleShot(t);
@@ -305,7 +307,7 @@ function renderAt(t, updateCamera = true) {
   tmpV.copy(camera.position).addScaledVector(sd, 5000).project(camera);
   const facing = tmpV.z < 1 && Math.abs(tmpV.x) < 1.6 && Math.abs(tmpV.y) < 1.6;
   g.uSunUV.value.set(tmpV.x * 0.5 + 0.5, tmpV.y * 0.5 + 0.5);
-  g.uSunVis.value = facing ? (1 - ov) * ss(el, -2, 3) * (1 - ss(el, 30, 50)) : 0;
+  g.uSunVis.value = usePostProcessing && facing ? (1 - ov) * ss(el, -2, 3) * (1 - ss(el, 30, 50)) : 0;
   g.uTime.value = t;
   g.uBar.value = window.camOverride ? 0 : BAR / H;
   g.uFade.value = 1 - ss(t, 0, 1.4);
@@ -319,31 +321,31 @@ function renderAt(t, updateCamera = true) {
   bloom.strength = lerp(0.22, 0.5, night);
   bloom.threshold = lerp(0.92, 0.75, night);
 
-  composer.render();
-  updateHUD(t, env);
+  if (updateEnvironment) renderer.shadowMap.needsUpdate = true;
+  if (usePostProcessing) composer.render();
+  else renderer.render(scene, camera);
+  if (updateEnvironment) updateHUD(t, env);
   return true;
 }
 
 window.renderAt = renderAt;
 window.TL = TL;
-window.sceneReady = () => ready;
+window.sceneReady = () => viewerReady;
 
 // 静态建成校园查看器：仅在加载完成或手动操作时重新渲染。
 const MODEL_TIME = 15;
 window.envOverride = { day: 666, tod: 10, cloud: 0.3, rain: 0, wet: 0, fog: 0.0006 };
-window.camOverride = { pos: [520, 340, 520], tgt: [40, 15, 0], fov: 42 };
+window.camOverride = { pos: [300, 215, 480], tgt: [0, 24, 80], fov: 50 };
 $('ui').style.display = 'none';
 
-init().then(() => {
+init().then(async () => {
   renderAt(MODEL_TIME);
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.copy(v3(window.camOverride.tgt));
-  controls.enableDamping = false;
-  controls.minDistance = 80;
-  controls.maxDistance = 1800;
-  controls.maxPolarAngle = Math.PI * 0.49;
-  controls.update();
-  controls.addEventListener('change', () => renderAt(MODEL_TIME, false));
+  await renderer.compileAsync(scene, camera);
+  renderAt(MODEL_TIME, false, false, false);
+  renderAt(MODEL_TIME, false, false, true);
+  renderer.shadowMap.autoUpdate = false;
+  const cameraRig = setupControls(camera, renderer.domElement);
+  const clock = new THREE.Clock();
 
   window.addEventListener('resize', () => {
     const w = window.innerWidth, h = window.innerHeight;
@@ -353,6 +355,14 @@ init().then(() => {
     composer.setSize(w, h);
     renderAt(MODEL_TIME, false);
   });
+  function animate() {
+    const dt = Math.min(clock.getDelta(), 0.1);
+    cameraRig.update(dt);
+    renderAt(MODEL_TIME, false, false, true);
+    requestAnimationFrame(animate);
+  }
+  viewerReady = true;
+  animate();
 }).catch((e) => { console.error(e); window.initError = String(e.stack || e); });
 
 

@@ -1,4 +1,4 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 
 const cache = new Map();
 let seed = 12345;
@@ -340,7 +340,7 @@ export function facadeTextures(style, floors, gfRatio, glass = false, tint = '')
         wg.addColorStop(0, '#6e8faa'); wg.addColorStop(1, s.win);
         g.fillStyle = wg; g.fillRect(wx, wy, ww, wh);
         g.fillStyle = s.frame; g.fillRect(wx + ww / 2 - 1.5, wy, 3, wh); g.fillRect(wx, wy + wh * 0.3, ww, 3);
-        if (style === 'dorm' && i > 0) { g.fillStyle = 'rgba(255,255,255,0.55)'; g.fillRect(wx - 6, wy + wh - 4, ww + 12, 6); }
+        if ((style === 'dorm') && i > 0) { g.fillStyle = 'rgba(255,255,255,0.55)'; g.fillRect(wx - 6, wy + wh - 4, ww + 12, 6); }
         if (rand() < (style === 'dorm' ? 0.6 : 0.45)) {
           const warm = rand();
           ge.fillStyle = warm < 0.75 ? `rgba(255,${200 + rand() * 40},${130 + rand() * 60},1)` : 'rgba(220,235,255,1)';
