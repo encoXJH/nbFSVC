@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VEHICLES, VEHICLE_BY_ID } from './vehicle-catalog.js';
 import { buildGenericVehicle, loadDetailedVehicles } from './vehicle-models.js';
-
+import { handlingFor, resetDynamics, updateDynamics } from './vehicle-dynamics.js';
 const $ = (id) => document.getElementById(id);
 const host = $('renderer-host');
 const scene = new THREE.Scene();
@@ -136,7 +136,12 @@ for (const entry of VEHICLES.filter((item) => item.model === 'generic')) {
   addGalleryModel(entry, buildGenericVehicle(entry));
 }
 
-const active = { entry: null, object: null, speed: 0, heading: 0, steer: 0, ownsModel: false };
+const active = {
+  entry: null, object: null, speed: 0, heading: 0, steer: 0, ownsModel: false,
+  vx: 0, vz: 0, yawRate: 0, gripK: 0, drifting: false, powerT: 0, slip: 0,
+  wheelAngle: 0, handling: null,
+};
+
 const lastTarget = new THREE.Vector3();
 const keys = new Set();
 
@@ -173,11 +178,7 @@ function resetCamera() {
 
 function resetActive(resetCameraToo = true) {
   if (!active.object) return;
-  active.object.position.set(30, .04, 54);
-  active.heading = 0;
-  active.speed = 0;
-  active.steer = 0;
-  active.object.rotation.set(0, 0, 0);
+  resetDynamics(active, 30, 54, 0);
   if (resetCameraToo) resetCamera();
 }
 
@@ -213,6 +214,7 @@ function selectVehicle(id) {
   if (!entry || !gallery) return;
   disposeActive();
   active.entry = entry;
+  active.handling = handlingFor(entry);
   active.object = entry.model === 'detail' ? gallery.clone(true) : buildGenericVehicle(entry);
   active.ownsModel = entry.model !== 'detail';
   scene.add(active.object);
@@ -293,48 +295,38 @@ function pressed(...codes) {
 function updateDrive(dt) {
   if (!active.object) return;
   const spec = active.entry.spec;
-  const throttle = pressed('KeyW', 'ArrowUp');
-  const brake = pressed('KeyS', 'ArrowDown');
-  const handbrake = pressed('Space');
-  const maxSpeed = spec.maxKmh / 3.6;
-  if (throttle) active.speed += spec.accel * dt;
-  if (brake) {
-    if (active.speed > .5) active.speed -= spec.brake * dt;
-    else active.speed -= spec.accel * .62 * dt;
-  }
-  if (!throttle && !brake) {
-    const drag = Math.min(Math.abs(active.speed), (1.1 + Math.abs(active.speed) * .055) * dt);
-    active.speed -= Math.sign(active.speed) * drag;
-  }
-  if (handbrake) {
-    const stopping = Math.min(Math.abs(active.speed), spec.brake * 1.65 * dt);
-    active.speed -= Math.sign(active.speed) * stopping;
-  }
-  active.speed = THREE.MathUtils.clamp(active.speed, -maxSpeed * .28, maxSpeed);
+  const input = {
+    throttle: pressed('KeyW', 'ArrowUp'),
+    brake: pressed('KeyS', 'ArrowDown'),
+    handbrake: pressed('Space'),
+  };
+  input.steer = Number(pressed('KeyD', 'ArrowRight')) - Number(pressed('KeyA', 'ArrowLeft'));
+  updateDynamics(active, input, dt);
 
-  const steerInput = Number(pressed('KeyD', 'ArrowRight')) - Number(pressed('KeyA', 'ArrowLeft'));
-  active.steer = THREE.MathUtils.damp(active.steer, steerInput, 9, dt);
-  if (Math.abs(active.speed) > .04) {
-    const direction = Math.sign(active.speed);
-    const lowSpeed = Math.min(1, Math.abs(active.speed) / 4);
-    const turnRate = (spec.twoWheeler ? 1.2 : .82) * lowSpeed * (.7 + spec.grip / 24);
-    active.heading += active.steer * direction * turnRate * dt;
+  const oldX = active.object.position.x;
+  const oldZ = active.object.position.z;
+  active.object.position.x = THREE.MathUtils.clamp(oldX, -172, 172);
+  active.object.position.z = THREE.MathUtils.clamp(oldZ, -172, 172);
+  if (oldX !== active.object.position.x || oldZ !== active.object.position.z) {
+    active.speed = 0;
+    active.vx = 0;
+    active.vz = 0;
+    active.drifting = false;
   }
-  active.object.position.x += Math.sin(active.heading) * active.speed * dt;
-  active.object.position.z -= Math.cos(active.heading) * active.speed * dt;
-  active.object.position.x = THREE.MathUtils.clamp(active.object.position.x, -172, 172);
-  active.object.position.z = THREE.MathUtils.clamp(active.object.position.z, -172, 172);
   active.object.rotation.y = -active.heading;
   const lean = spec.twoWheeler ? -active.steer * Math.min(1, Math.abs(active.speed) / 16) * .22 : 0;
   active.object.rotation.z = THREE.MathUtils.damp(active.object.rotation.z, lean, 7, dt);
 
   for (const wheel of active.object.userData.wheels || []) {
-    wheel.tire.rotation.x -= active.speed / wheel.radius * dt;
-    wheel.hub.rotation.x -= active.speed / wheel.radius * dt;
-    if (wheel.steering) wheel.pivot.rotation.y = -active.steer * .32;
+    const wheelSpeed = input.handbrake && !wheel.steering ? 0 : active.speed;
+    wheel.tire.rotation.x -= wheelSpeed / wheel.radius * dt;
+    wheel.hub.rotation.x -= wheelSpeed / wheel.radius * dt;
+    if (wheel.steering) wheel.pivot.rotation.y = -active.wheelAngle;
   }
   $('speed-value').textContent = String(Math.round(Math.abs(active.speed) * 3.6));
-  $('drive-state').textContent = handbrake ? '手刹制动' : active.speed > .15 ? '前進' : active.speed < -.15 ? '倒車' : '待命';
+  const driftDegrees = Math.round(Math.abs(active.slip) * 180 / Math.PI);
+  $('drive-state').textContent = active.drifting ? `漂移 ${driftDegrees}°`
+    : input.handbrake ? '手刹制动' : active.speed > .15 ? '前進' : active.speed < -.15 ? '倒車' : '待命';
 
   const target = active.object.position.clone();
   target.y += Math.max(.8, spec.h * .55);

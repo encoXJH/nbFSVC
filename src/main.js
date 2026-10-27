@@ -10,6 +10,7 @@ import { buildSiteCanvases, createGround, createSky, createSea, createHills, cre
 import { createConstruction } from './construction.js';
 import { facadeTextures, loadTexture, setSeed } from './textures.js';
 import * as TL from './timeline.js';
+import { createVehicleMode } from './vehicle-mode.js';
 
 const W = window.innerWidth, H = window.innerHeight;
 const BAR = 104; // letterbox bar height in px (~2.2:1 picture)
@@ -51,6 +52,7 @@ const siteLights = [[-60, 40, 120], [80, 40, -100], [-250, 40, 0], [300, 40, -50
 });
 
 let ready = false;
+let vehicleMode = null;
 let constr, trees, rain, sky, panoTex;
 
 async function init() {
@@ -289,7 +291,7 @@ function renderAt(t, updateCamera = true) {
   constr.update(day, t, { night });
   trees.userData.update(day, t);
 
-  if (updateCamera) {
+  if (updateCamera && !vehicleMode?.isDriving()) {
     const cam = window.camOverride ? { ...window.camOverride, pos: v3(window.camOverride.pos), tgt: v3(window.camOverride.tgt) } : sampleShot(t);
     camera.up.set(...(window.camOverride && window.camOverride.up ? window.camOverride.up : [0, 1, 0]));
     camera.position.copy(cam.pos);
@@ -307,7 +309,7 @@ function renderAt(t, updateCamera = true) {
   g.uSunUV.value.set(tmpV.x * 0.5 + 0.5, tmpV.y * 0.5 + 0.5);
   g.uSunVis.value = facing ? (1 - ov) * ss(el, -2, 3) * (1 - ss(el, 30, 50)) : 0;
   g.uTime.value = t;
-  g.uBar.value = window.camOverride ? 0 : BAR / H;
+  g.uBar.value = window.camOverride || vehicleMode?.isDriving() ? 0 : BAR / H;
   g.uFade.value = 1 - ss(t, 0, 1.4);
   g.uPano.value = ss(t, TL.PANO.t0, TL.PANO.t1);
   g.uYaw.value = TL.PANO.yawDeg / 360;
@@ -344,6 +346,11 @@ init().then(() => {
   controls.maxPolarAngle = Math.PI * 0.49;
   controls.update();
   controls.addEventListener('change', () => renderAt(MODEL_TIME, false));
+  vehicleMode = createVehicleMode({
+    scene, camera, renderer, controls,
+    renderFrame: () => renderAt(MODEL_TIME, false),
+  });
+  window.vehicleMode = vehicleMode;
 
   window.addEventListener('resize', () => {
     const w = window.innerWidth, h = window.innerHeight;

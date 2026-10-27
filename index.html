@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>一座校园的诞生 · 福州软件职业技术学院</title>
+<link rel="icon" href="data:,">
 <style>
   html,body{margin:0;padding:0;background:#000;overflow:hidden;width:100%;height:100%}
   canvas{display:block}
@@ -37,6 +38,35 @@
   #big666 .n{font-size:230px;font-weight:200;letter-spacing:10px;font-family:"Bahnschrift",sans-serif;text-shadow:0 6px 50px rgba(0,0,0,.5)}
   #big666 .l{font-size:34px;letter-spacing:22px;margin-top:-10px}
   #slogan{position:absolute;right:150px;top:300px;writing-mode:vertical-rl;font-size:40px;letter-spacing:16px;text-shadow:0 2px 20px rgba(0,0,0,.6)}
+  #drive-hint,#drive-hud,#drive-loading,#drive-menu{font-family:"Microsoft JhengHei","Noto Sans SC",system-ui,sans-serif;color:#f4f1ea}
+  #drive-hint[hidden],#drive-hud[hidden],#drive-loading[hidden],#drive-menu[hidden],.drive-option[hidden]{display:none!important}
+  #drive-hint{position:fixed;left:24px;bottom:22px;z-index:20;padding:10px 14px;background:rgba(12,14,16,.86);border-left:3px solid #df3038;font-size:13px;letter-spacing:.04em}
+  #drive-hint b,#drive-help kbd{display:inline-block;min-width:22px;padding:0 4px;text-align:center;border:1px solid #60656b;background:#1b1e22;font:12px/20px Consolas,monospace}
+  #drive-hud{position:fixed;inset:0;z-index:20;pointer-events:none;text-shadow:0 2px 8px #000}
+  #drive-vehicle{position:absolute;left:26px;top:24px;font-size:22px;font-weight:800}
+  #drive-mode-help{position:absolute;left:26px;top:56px;color:#d2d4d7;font-size:12px}
+  #drive-speed{position:absolute;right:28px;bottom:24px;text-align:right;font:600 70px/.85 "Bahnschrift",sans-serif;font-variant-numeric:tabular-nums}
+  #drive-speed small{display:block;margin-top:9px;color:#d0d3d6;font:11px/1.2 system-ui,sans-serif;letter-spacing:.18em}
+  #drive-state{position:absolute;right:30px;bottom:112px;color:#fff;font-size:14px}
+  #drive-help{position:absolute;left:26px;bottom:24px;color:#d5d7da;font-size:12px;line-height:2}
+  #drive-help kbd{margin:0 2px}
+  #drive-loading{position:fixed;left:50%;top:24px;transform:translateX(-50%);z-index:45;padding:10px 16px;background:#14171a;border-left:3px solid #df3038;font-size:13px}
+  #drive-menu{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:28px;background:rgba(5,6,8,.82)}
+  .drive-dialog{display:flex;flex-direction:column;width:min(780px,94vw);max-height:86vh;background:#121417;border-top:3px solid #df3038;box-shadow:0 18px 70px rgba(0,0,0,.45)}
+  .drive-dialog-head{display:flex;align-items:center;padding:20px 22px 14px;gap:14px}
+  .drive-dialog-head h2{margin:0;font-size:24px;letter-spacing:.04em}
+  .drive-dialog-head span{color:#92979e;font-size:12px}
+  #drive-menu-close{margin-left:auto;padding:7px 12px;border:1px solid #3b4046;background:transparent;color:#fff;cursor:pointer}
+  #drive-search{margin:0 22px 14px;padding:11px 2px;border:0;border-bottom:1px solid #50555c;outline:none;background:transparent;color:#fff;font:inherit}
+  #drive-search:focus{border-color:#df3038}
+  #drive-list{display:grid;grid-template-columns:1fr 1fr;gap:5px;overflow-y:auto;padding:0 16px 18px}
+  .drive-option{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 14px;border:0;border-left:3px solid transparent;background:#1a1d21;color:#f4f1ea;text-align:left;cursor:pointer;transition:transform .18s cubic-bezier(.34,1.56,.64,1),background .15s}
+  .drive-option:hover{background:#272b30;transform:translateX(2px)}
+  .drive-option:active{transform:scale(.985)}
+  .drive-option.selected{border-left-color:#df3038;background:#2b2426}
+  .drive-option .drive-kind{color:#92979e;font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+  .drive-option .drive-id{grid-column:1/-1;color:#8d9299;font:11px Consolas,monospace}
+  @media(max-width:640px){#drive-list{grid-template-columns:1fr}#drive-help{display:none}#drive-speed{font-size:52px}#drive-vehicle{font-size:18px}}
 </style>
 <script type="importmap">
 { "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/" } }
@@ -55,7 +85,23 @@
   <div id="prog" class="fade"><div></div></div>
   <div id="big666" class="fade serif"><div class="n">999</div><div class="l">天</div></div>
 </div>
-<script type="module" src="/src/main.js"></script>
+<div id="drive-hint">按 <b>V</b> 进入驾驶　按 <b>U</b> 打开车辆选单</div>
+<div id="drive-hud" hidden>
+  <div id="drive-vehicle">Altis</div>
+  <div id="drive-mode-help">V 退出驾驶　U 换车　R 回到道路</div>
+  <div id="drive-state">待命</div>
+  <div id="drive-speed">0<small>KM/H</small></div>
+  <div id="drive-help"><kbd>W</kbd><kbd>S</kbd> 油门 / 制动　<kbd>A</kbd><kbd>D</kbd> 转向　<kbd>Space</kbd> 手刹漂移</div>
+</div>
+<div id="drive-loading" hidden>正在加载车辆</div>
+<div id="drive-menu" hidden>
+  <section class="drive-dialog" aria-label="车辆选单">
+    <div class="drive-dialog-head"><h2>选择车辆</h2><span>40 项配置 · 按 U 关闭</span><button id="drive-menu-close" type="button">关闭</button></div>
+    <input id="drive-search" type="search" placeholder="搜索车型或 ID" autocomplete="off">
+    <div id="drive-list"></div>
+  </section>
+</div>
+<script type="module" src="/src/main.js?v=vehicle"></script>
 </body>
 </html>
 
