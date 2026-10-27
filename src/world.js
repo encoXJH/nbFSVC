@@ -149,13 +149,14 @@ export function buildSiteCanvases() {
   // sports facilities
   trackDraw(g, SITE.track1); stadium(gd, { ...SITE.track1, r: SITE.track1.r + 12 }); gd.fillStyle = dayCol(578); gd.fill();
   trackDraw(g, SITE.track2); stadium(gd, { ...SITE.track2, r: SITE.track2.r + 10 }); gd.fillStyle = dayCol(590); gd.fill();
-  trackDraw(g, { ...SITE.blueCourt, lanes: 5, w: 1.2 }, '#3e4fa6', '#4d8f45');
+  trackDraw(g, SITE.blueCourt, '#3e4fa6', '#4d8f45');
   stadium(gd, { ...SITE.blueCourt, r: SITE.blueCourt.r + 8 }); gd.fillStyle = dayCol(596); gd.fill();
   const ct = SITE.courts;
   fillBoth((c) => rrect(c, ct.x0, ct.y0, ct.x1, ct.y1, 2), '#4b8a52', 598);
   for (let i = 0; i < 6; i++) { const x = ct.x0 + 6 + i * 29; rrect(g, x, ct.y0 + 8, x + 24, ct.y1 - 8, 1); g.fillStyle = '#3a63a8'; g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 1; g.stroke(); }
   const kp = SITE.kidsPlay;
-  fillBoth((c) => rrect(c, kp.x0, kp.y0, kp.x1, kp.y1, 8), '#7a83c9', 604);
+  // 操场上方原蓝色儿童活动区恢复为草地。
+  fillBoth((c) => rrect(c, kp.x0, kp.y0, kp.x1, kp.y1, 8), '#5d8a3e', 604);
   for (const [x, y, r] of SITE.roundPlay) {
     for (const c of [g, gd]) { c.beginPath(); c.arc(...P(x, y), r * SC, 0, Math.PI * 2); c.fillStyle = c === g ? '#c8573f' : dayCol(604); c.fill(); }
     g.beginPath(); g.arc(...P(x, y), r * SC * 0.7, 0, Math.PI * 2); g.fillStyle = '#d7e6e8'; g.fill();

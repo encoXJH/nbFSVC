@@ -148,7 +148,7 @@ export const SITE = {
   flag: { x: 1022, y: 542 },
   track1: { cx: 1120, cy: 542, rot: 0, straight: 84.39, r: 36.5, lanes: 8, w: 1.22 },
   track2: { cx: 1292, cy: 612, rot: -13, straight: 62, r: 26, lanes: 6, w: 1.22 },
-  blueCourt: { cx: 1341, cy: 399, straight: 50, r: 22, rot: 0 },
+  blueCourt: { cx: 1348, cy: 382.5, straight: 22, r: 14, rot: 0, lanes: 3, w: 1.0 },
   courts: { x0: 1382, y0: 428, x1: 1560, y1: 515 },
   kidsPlay: { x0: 1206, y0: 342, x1: 1280, y1: 414 },
   roundPlay: [[1272, 760, 30], [1238, 736, 11], [1255, 800, 14]],
