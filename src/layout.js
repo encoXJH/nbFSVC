@@ -51,9 +51,9 @@ const NORTH_DORM = { ...DORM, style: 'castle', floors: 7 };
   add({ id: `dorm_nw${i}`, name: '宿舍楼', ...NORTH_DORM, parts: [C(x, y, 112, 30, 22)], cranes: [[ux(x) + 22, uz(y) - 24]] }));
 add({ id: 'dorm_row', name: '宿舍楼', ...NORTH_DORM, parts: [R(240, 366, 362, 402), R(368, 366, 490, 402)],
   cranes: [[ux(300), uz(352)], [ux(430), uz(352)]] });
-add({ id: 'dorm_aux1', ...DORM, floors: 4, parts: [R(452, 158, 500, 196)] });
-add({ id: 'dorm_aux2', ...DORM, floors: 4, parts: [R(500, 222, 540, 256)] });
-add({ id: 'dorm_aux3', ...DORM, floors: 4, parts: [R(446, 285, 482, 320)] });
+add({ id: 'dorm_aux1', ...NORTH_DORM, parts: [R(452, 158, 500, 196)] });
+add({ id: 'dorm_aux2', ...NORTH_DORM, parts: [R(500, 222, 540, 256)] });
+add({ id: 'dorm_aux3', ...NORTH_DORM, parts: [R(446, 285, 482, 320)] });
 add({ id: 'admin', name: '行政楼', style: 'arcade', floors: 5, gf: 4.8, fh: 3.8, sched: B2, group: 'west',
   parts: [C(226, 480, 50, 100, 8)], cranes: [[ux(272), uz(470)]] });
 add({ id: 'canteen', name: '食堂', style: 'arcade', floors: 3, gf: 5.5, fh: 4.6, sched: B2, group: 'west',
@@ -137,7 +137,7 @@ export const SITE = {
     outer: { x0: 536, y0: 250, x1: 968, y1: 712, r: 56 },
     inner: { x0: 570, y0: 300, x1: 934, y1: 655, r: 24 },
     // 桥面包含两端引道，并与两侧道路略有重叠，避免出现草地断点。
-    bridges: [[750, 232, 764, 314], [746, 650, 768, 720], [526, 470, 586, 492], [918, 474, 996, 488]],
+    bridges: [[750, 232, 764, 314], [746, 650, 768, 720], [918, 474, 996, 488]],
   },
   innerRoad: { x0: 586, y0: 314, x1: 918, y1: 650, r: 18, w: 9 },
   innerPave: { x0: 582, y0: 312, x1: 922, y1: 648 },

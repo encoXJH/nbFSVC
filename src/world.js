@@ -76,7 +76,7 @@ export function buildSiteCanvases() {
   const rg = SITE.ring;
   for (const c of [g, gd]) { rrect(c, rg.x0, rg.y0, rg.x1, rg.y1, rg.r); c.lineWidth = rg.w * SC; c.strokeStyle = c === g ? asphalt : dayCol(548); c.stroke(); }
   g.setLineDash([12, 14]); g.lineWidth = 1.5; g.strokeStyle = 'rgba(255,255,255,0.7)'; rrect(g, rg.x0, rg.y0, rg.x1, rg.y1, rg.r); g.stroke(); g.setLineDash([]);
-  // moat: one continuous ring (rounded annulus) crossed by four bridges on the axes
+  // 护城河保留三座连接桥，风雨长廊旁的西侧水面不再设置桥梁。
   const MR = SITE.moatRing;
   const ringPath = (c, pad) => {
     const o = MR.outer, i = MR.inner;

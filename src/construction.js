@@ -353,11 +353,168 @@ function buildPart(b, p, U, root) {
     const roof = new THREE.Mesh(new THREE.BoxGeometry(p.w * 0.9, 0.4, p.d), clipMat({ color: 0xf3f3f3, roughness: 0.5 }, u.roofClip));
     roof.position.set(-p.w * 0.1, H + 4, 0); roof.rotation.z = -0.12; grp.add(roof);
     if (b.id === 'stand_e') grp.rotation.y += Math.PI;
+  } else if (b.id === 'corridor') {
+    // 风雨长廊仅二楼连通：一楼采用真实拱洞，保留贯穿视线与地面通道。
+    shell = new THREE.Group();
+    const upperGeo = facadeBox(p.w, p.d, b.fh, BAY.arcade);
+    const uv = upperGeo.getAttribute('uv');
+    for (let i = 0; i < uv.count; i++) uv.setY(i, 0.5 + uv.getY(i) * 0.5);
+    upperGeo.translate(0, b.gf, 0);
+    const upper = new THREE.Mesh(upperGeo, [fMat, rMat]);
+    shell.add(upper);
+
+    const slab = new THREE.Mesh(
+      new THREE.BoxGeometry(p.w + 0.4, 0.35, p.d + 0.4),
+      clipMat({ color: 0xd8bd94, roughness: 0.85 }, u.faClip)
+    );
+    slab.position.y = b.gf;
+    shell.add(slab);
+
+    const arcadeShape = new THREE.Shape();
+    arcadeShape.moveTo(-p.w / 2, 0);
+    arcadeShape.lineTo(p.w / 2, 0);
+    arcadeShape.lineTo(p.w / 2, b.gf);
+    arcadeShape.lineTo(-p.w / 2, b.gf);
+    arcadeShape.closePath();
+    const openings = [
+      { x: 0, r: 4.25, spring: 0.2 },
+      ...[-1, 1].flatMap((side) => [8.7, 19.0, 29.3].map((x) => ({ x: x * side, r: 2.85, spring: 1.15 })))
+    ];
+    grp.userData.arcadeOpenings = openings;
+    for (const { x, r, spring } of openings) {
+      const opening = new THREE.Path();
+      opening.moveTo(x - r, 0);
+      opening.lineTo(x - r, spring);
+      opening.absarc(x, spring, r, Math.PI, 0, true);
+      opening.lineTo(x + r, 0);
+      opening.closePath();
+      arcadeShape.holes.push(opening);
+    }
+    const stone = clipMat({ color: 0xb99a8d, roughness: 0.88 }, u.faClip);
+    for (const side of [-1, 1]) {
+      const wallGeo = new THREE.ExtrudeGeometry(arcadeShape, { depth: 0.75, bevelEnabled: false, curveSegments: 16 });
+      wallGeo.translate(0, 0, -0.375);
+      const wall = new THREE.Mesh(wallGeo, stone);
+      wall.position.z = side * (p.d / 2 - 0.375);
+      shell.add(wall);
+    }
+    shell.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   } else {
     shell = new THREE.Mesh(facadeBox(p.w, p.d, H, BAY[b.style] || 30), [fMat, rMat]);
   }
   shell.castShadow = true; shell.receiveShadow = true;
   grp.add(shell);
+
+  if (b.id === 'canteen') {
+    // 食堂入口与立面细部：石材基座、壁柱、门廊、牌匾和分层檐口。
+    const trim = clipMat({ color: 0xead6ae, roughness: 0.82 }, u.faClip);
+    const pink = clipMat({ color: 0xa98a80, roughness: 0.86 }, u.faClip);
+    const glass = clipMat({ color: 0x294553, roughness: 0.22, metalness: 0.35 }, u.faClip);
+    const addBox = (w, h, d, x, y, z, mat = trim) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; grp.add(mesh);
+      return mesh;
+    };
+    addBox(p.w + 0.7, 0.8, p.d + 0.7, 0, 0.4, 0, pink);
+    addBox(p.w + 0.8, 0.45, p.d + 0.8, 0, b.gf - 0.15, 0);
+    addBox(p.w + 1.1, 0.7, p.d + 1.1, 0, H - 0.35, 0);
+    const bay = p.w / 8;
+    for (let i = 0; i <= 8; i++) for (const side of [-1, 1]) {
+      addBox(0.55, H - b.gf - 0.6, 0.35, -p.w / 2 + i * bay, b.gf + (H - b.gf) / 2, side * (p.d / 2 + 0.16));
+    }
+    const front = p.d / 2;
+    addBox(8.2, 3.7, 0.22, 0, 2.05, front + 0.16, glass);
+    addBox(12.2, 0.45, 4.1, 0, 4.35, front + 1.85);
+    addBox(12.8, 0.22, 4.5, 0, 4.67, front + 1.85);
+    for (const x of [-4.6, -1.55, 1.55, 4.6]) {
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.36, 4.0, 12), trim);
+      col.position.set(x, 2.0, front + 3.25); col.castShadow = true; grp.add(col);
+      addBox(0.85, 0.28, 0.85, x, 0.14, front + 3.25, pink);
+    }
+    for (let i = 0; i < 3; i++) addBox(13.2 - i * 0.7, 0.14, 1.0, 0, 0.07 + i * 0.14, front + 4.2 - i * 0.65, pink);
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(5.8, 0.9),
+      clipMat({ map: bannerTexture('学生食堂', '#584634', '#f1ddb3'), roughness: 0.65 }, u.faClip)
+    );
+    sign.position.set(0, 5.12, front + 0.25); grp.add(sign);
+  }
+
+  if (b.id === 'corridor') {
+    // 按实景细化中央主拱、连续拱窗、突出门楼和三角山花。
+    const trim = clipMat({ color: 0xd8b79f, roughness: 0.82 }, u.faClip);
+    const cream = clipMat({ color: 0xead6ae, roughness: 0.84 }, u.faClip);
+    const inset = clipMat({ color: 0xd8c39c, roughness: 0.86, side: THREE.DoubleSide }, u.faClip);
+    const glass = clipMat({ color: 0x263e49, roughness: 0.24, metalness: 0.25, side: THREE.DoubleSide }, u.faClip);
+    const bronze = clipMat({ color: 0x8d7351, roughness: 0.5, metalness: 0.35 }, u.faClip);
+    const bay = p.w / 8, openings = grp.userData.arcadeOpenings;
+    const addArchWindow = (x, y, z, r, rectH, frame = cream) => {
+      const shape = new THREE.Shape();
+      shape.moveTo(-r, 0); shape.lineTo(r, 0); shape.lineTo(r, rectH);
+      shape.absarc(0, rectH, r, 0, Math.PI, false); shape.closePath();
+      const pane = new THREE.Mesh(new THREE.ShapeGeometry(shape, 24), glass);
+      pane.position.set(x, y, z); grp.add(pane);
+      const face = Math.sign(z) || 1;
+      const arch = new THREE.Mesh(new THREE.TorusGeometry(r + 0.1, 0.13, 7, 28, Math.PI), frame);
+      arch.position.set(x, y + rectH, z + face * 0.025); grp.add(arch);
+      for (const sx of [-1, 1]) {
+        const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.22, rectH, 0.18), frame);
+        jamb.position.set(x + sx * (r + 0.1), y + rectH / 2, z + face * 0.025); grp.add(jamb);
+      }
+    };
+    for (const side of [-1, 1]) {
+      const z = side * (p.d / 2 + 0.12);
+      for (const [y, h, w] of [[b.gf + 0.02, 0.34, 0.5], [H - 0.18, 0.4, 0.58]]) {
+        const band = new THREE.Mesh(new THREE.BoxGeometry(p.w + w, h, w), cream);
+        band.position.set(0, y, z); grp.add(band);
+      }
+      for (let i = 0; i < 8; i++) {
+        const x = -p.w / 2 + (i + 0.5) * bay;
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(bay - 0.12, b.fh - 0.3, 0.16), cream);
+        panel.position.set(x, b.gf + b.fh / 2, side * (p.d / 2 + 0.1)); grp.add(panel);
+        addArchWindow(x, b.gf + 0.72, side * (p.d / 2 + 0.21), 1.02, 0.72);
+      }
+      for (let i = 0; i <= 8; i++) {
+        const pilaster = new THREE.Mesh(new THREE.BoxGeometry(0.32, b.fh - 0.25, 0.26), cream);
+        pilaster.position.set(-p.w / 2 + i * bay, b.gf + b.fh / 2, z); grp.add(pilaster);
+      }
+      for (const { x, r, spring } of openings) {
+        const arch = new THREE.Mesh(new THREE.TorusGeometry(r + 0.12, r > 4 ? 0.24 : 0.17, 8, 32, Math.PI), trim);
+        arch.position.set(x, spring, side * (p.d / 2 + 0.05)); grp.add(arch);
+        for (const sx of [-1, 1]) {
+          const jamb = new THREE.Mesh(new THREE.BoxGeometry(r > 4 ? 0.46 : 0.3, spring, 0.34), trim);
+          jamb.position.set(x + sx * (r + 0.12), spring / 2, side * (p.d / 2 + 0.05)); grp.add(jamb);
+        }
+      }
+      for (let x = -p.w / 2 + 0.7; x < p.w / 2; x += 1.55) {
+        const dentil = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.42, 0.42), trim);
+        dentil.position.set(x, b.gf - 0.3, side * (p.d / 2 + 0.16)); grp.add(dentil);
+      }
+      const portal = new THREE.Mesh(new THREE.BoxGeometry(13.6, b.fh + 1.1, 0.82), cream);
+      portal.position.set(0, b.gf + (b.fh + 1.1) / 2, side * (p.d / 2 + 0.5)); grp.add(portal);
+      addArchWindow(0, b.gf + 0.38, side * (p.d / 2 + 0.94), 1.75, 0.72);
+      for (const x of [-0.6, 0.6]) {
+        const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.09, 2.05, 0.1), bronze);
+        mullion.position.set(x, b.gf + 1.35, side * (p.d / 2 + 1.0)); grp.add(mullion);
+      }
+      const transom = new THREE.Mesh(new THREE.BoxGeometry(3.35, 0.09, 0.1), bronze);
+      transom.position.set(0, b.gf + 1.05, side * (p.d / 2 + 1.0)); grp.add(transom);
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(10.2, 0.18, 0.3), cream);
+      rail.position.set(0, b.gf + 0.45, side * (p.d / 2 + 1.02)); grp.add(rail);
+      for (let x = -4.8; x <= 4.8; x += 0.8) {
+        const baluster = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.72, 0.2), cream);
+        baluster.position.set(x, b.gf + 0.08, side * (p.d / 2 + 1.02)); grp.add(baluster);
+      }
+      const pedimentShape = new THREE.Shape();
+      pedimentShape.moveTo(-7.1, 0); pedimentShape.lineTo(7.1, 0); pedimentShape.lineTo(0, 2.35); pedimentShape.closePath();
+      const pediment = new THREE.Mesh(new THREE.ExtrudeGeometry(pedimentShape, { depth: 0.82, bevelEnabled: false }), cream);
+      pediment.position.set(0, H + 1.0, side * (p.d / 2 + 0.5) - 0.41); grp.add(pediment);
+      const innerShape = new THREE.Shape();
+      innerShape.moveTo(-5.85, 0); innerShape.lineTo(5.85, 0); innerShape.lineTo(0, 1.78); innerShape.closePath();
+      const inner = new THREE.Mesh(new THREE.ShapeGeometry(innerShape), inset);
+      inner.position.set(0, H + 1.27, side * (p.d / 2 + 0.96)); grp.add(inner);
+    }
+    grp.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  }
 
   // architectural relief for the castle complex: belt course, cornice, projecting pilasters, parapet merlons
   if (['castle', 'gate', 'atrium'].includes(b.style)) {
@@ -595,6 +752,21 @@ function buildPart(b, p, U, root) {
         bx.position.set((rand() - 0.5) * (p.w - 8), ph + 1, (rand() - 0.5) * (p.d - 8)); bx.castShadow = true; cr.add(bx);
       }
     }
+  }
+  if (b.id === 'corridor') {
+    // 食堂二楼标高 4.5 m，教学楼二楼标高 5.6 m，长廊以缓坡对齐两端。
+    const rise = BUILDINGS.find((item) => item.id === 'tb_w').gf - b.gf;
+    grp.traverse((o) => {
+      if (!o.isMesh) return;
+      const pos = o.geometry.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) {
+        const t = THREE.MathUtils.clamp((pos.getX(i) + o.position.x + p.w / 2) / p.w, 0, 1);
+        pos.setY(i, pos.getY(i) + t * rise);
+      }
+      pos.needsUpdate = true;
+      o.geometry.computeVertexNormals();
+      o.geometry.computeBoundingSphere();
+    });
   }
   if (b.style === 'atrium') {
     const dome = new THREE.Mesh(new THREE.BoxGeometry(p.w * 0.7, 2.2, p.d * 0.85), clipMat({ color: 0xe9d7b0, roughness: 0.85, metalness: 0.02 }, u.roofClip));
