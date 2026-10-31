@@ -52,7 +52,7 @@ function disposeObject(object) {
   materials.forEach((material) => material.dispose());
 }
 
-export function createVehicleMode({ scene, camera, renderer, controls, renderFrame }) {
+export function createVehicleMode({ scene, camera, renderer, controls, renderFrame, onStateChange, canInteract = () => true }) {
   const active = {
     entry: null, object: null, ownsModel: false, handling: null,
     speed: 0, heading: 0, steer: 0, vx: 0, vz: 0, yawRate: 0,
@@ -76,19 +76,20 @@ export function createVehicleMode({ scene, camera, renderer, controls, renderFra
   const cameraTarget = new THREE.Vector3();
 
   function syncUI() {
-    $('drive-hint').hidden = driving || menuOpen;
+    $('drive-hint').hidden = !canInteract() || driving || menuOpen;
     $('drive-hud').hidden = !driving;
     $('drive-menu').hidden = !menuOpen;
     $('drive-loading').hidden = !loading;
     $('drive-vehicle').textContent = VEHICLE_BY_ID[selectedId].name.zh;
     $('drive-mode-help').textContent = pointerLocked
-      ? 'V 退出驾驶　U 换车　鼠标转视角 / ESC 解锁'
+      ? 'F 下车　U 换车　鼠标转视角 / ESC 解锁'
       : '点击画面锁定鼠标转视角　U 换车';
     for (const [id, button] of options) button.classList.toggle('selected', id === selectedId);
+    onStateChange?.(driving, menuOpen);
   }
 
   function lockPointer() {
-    if (!driving || menuOpen || document.pointerLockElement === renderer.domElement) return;
+    if (!canInteract() || !driving || menuOpen || document.pointerLockElement === renderer.domElement) return;
     try {
       const request = renderer.domElement.requestPointerLock();
       if (request?.catch) request.catch(() => {});
@@ -107,7 +108,7 @@ export function createVehicleMode({ scene, camera, renderer, controls, renderFra
     if (driving && !menuOpen) lockPointer();
   });
   document.addEventListener('mousemove', (event) => {
-    if (!pointerLocked || !driving || menuOpen) return;
+    if (!canInteract() || !pointerLocked || !driving || menuOpen) return;
     viewYaw += event.movementX * .0022;
     viewPitch = THREE.MathUtils.clamp(viewPitch + event.movementY * .002, .12, 1.12);
   });
@@ -142,6 +143,13 @@ export function createVehicleMode({ scene, camera, renderer, controls, renderFra
     active.object = null;
     active.entry = null;
     active.ownsModel = false;
+  }
+
+  async function preload(onProgress) {
+    const entries = VEHICLES.filter((entry) => entry.model !== 'generic' && !detailCache.has(entry.id));
+    if (!entries.length) return;
+    const models = await loadDetailedVehicles(entries, onProgress);
+    for (const [id, model] of models) detailCache.set(id, model);
   }
 
   async function instantiate(entry) {
@@ -218,9 +226,16 @@ export function createVehicleMode({ scene, camera, renderer, controls, renderFra
         active.wheelAngle = 0;
         active.object.rotation.set(0, -active.heading, 0);
       } else {
-        resetDynamics(active, SPAWN.x, SPAWN.z, SPAWN.heading);
+        const direction = camera.getWorldDirection(new THREE.Vector3());
+        direction.y = 0;
+        direction.normalize();
+        const distance = Math.max(5, entry.spec.l + 1.5);
+        const x = camera.position.x + direction.x * distance;
+        const z = camera.position.z + direction.z * distance;
+        if (isBlocked(x, z, entry.spec)) resetDynamics(active, SPAWN.x, SPAWN.z, SPAWN.heading);
+        else resetDynamics(active, x, z, Math.atan2(direction.x, -direction.z));
       }
-      active.object.visible = driving;
+      active.object.visible = true;
       scene.add(active.object);
       return true;
     } catch (error) {
@@ -348,24 +363,29 @@ export function createVehicleMode({ scene, camera, renderer, controls, renderFra
     keys.clear();
     renderer.setAnimationLoop(null);
     unlockPointer();
-    closeMenu();
-    destroyActive();
+    menuOpen = false;
+    if (document.activeElement === $('drive-search')) $('drive-search').blur();
     if (savedView) {
-      camera.position.copy(savedView.position);
+      const exitPosition = savedView.position.clone();
+      if (active.object) {
+        const right = new THREE.Vector3(Math.cos(active.heading), 0, Math.sin(active.heading));
+        exitPosition.copy(active.object.position).addScaledVector(right, active.entry.spec.w / 2 + 1.2);
+        exitPosition.y = savedView.position.y;
+      }
+      camera.position.copy(exitPosition);
       camera.up.copy(savedView.up);
       camera.near = savedView.near;
       camera.fov = savedView.fov;
       camera.updateProjectionMatrix();
       controls.target.copy(savedView.target);
       window.camOverride = {
-        pos: savedView.position.toArray(),
+        pos: exitPosition.toArray(),
         tgt: savedView.target.toArray(),
         up: savedView.up.toArray(),
         fov: savedView.fov,
       };
     }
     controls.enabled = true;
-    controls.update();
     renderFrame();
     syncUI();
   }
@@ -387,10 +407,8 @@ export function createVehicleMode({ scene, camera, renderer, controls, renderFra
     id.textContent = entry.id;
     button.append(name, kind, id);
     button.addEventListener('click', async () => {
-      const resumeDriving = driving;
       closeMenu();
-      const changed = await setVehicle(entry.id);
-      if (changed && !resumeDriving) enterDrive();
+      await setVehicle(entry.id);
     });
     optionList.appendChild(button);
     options.set(entry.id, button);
@@ -404,6 +422,7 @@ export function createVehicleMode({ scene, camera, renderer, controls, renderFra
 
   const drivingKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyR']);
   window.addEventListener('keydown', (event) => {
+    if (!canInteract()) return;
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
       if (event.code === 'Escape' || (event.code === 'KeyU' && !event.repeat)) {
         event.preventDefault();
@@ -411,7 +430,7 @@ export function createVehicleMode({ scene, camera, renderer, controls, renderFra
       }
       return;
     }
-    if (event.code === 'KeyV' && !event.repeat) {
+    if (event.code === 'KeyF' && !event.repeat) {
       event.preventDefault();
       if (driving) exitDrive();
       else enterDrive();
@@ -444,7 +463,9 @@ export function createVehicleMode({ scene, camera, renderer, controls, renderFra
   syncUI();
 
   return {
+    preload,
     isDriving: () => driving,
+    isMenuOpen: () => menuOpen,
     getState: () => ({
       driving, menuOpen, loading, selectedId, pointerLocked, viewYaw, viewPitch,
       speed: active.speed,

@@ -1,0 +1,82 @@
+[
+ {
+  "file": "usp.mp3",
+  "start": 0.58,
+  "end": 1.13,
+  "dur": 0.55,
+  "frames": 16.5,
+  "peak": -1.93
+ },
+ {
+  "file": "deserteagle.mp3",
+  "start": 1.245,
+  "end": 1.935,
+  "dur": 0.69,
+  "frames": 20.7,
+  "peak": -0.21
+ },
+ {
+  "file": "m4a1s.mp3",
+  "start": 2.085,
+  "end": 2.555,
+  "dur": 0.47,
+  "frames": 14.1,
+  "peak": -0.43
+ },
+ {
+  "file": "m4a1.mp3",
+  "start": 2.76,
+  "end": 3.19,
+  "dur": 0.43,
+  "frames": 12.9,
+  "peak": -0.19
+ },
+ {
+  "file": "awp.mp3",
+  "start": 3.425,
+  "end": 4.21,
+  "dur": 0.785,
+  "frames": 23.55,
+  "peak": -0.04
+ },
+ {
+  "file": "grenade.mp3",
+  "start": 6.19,
+  "end": 8.085,
+  "dur": 1.895,
+  "frames": 56.85,
+  "peak": -0.42
+ },
+ {
+  "file": "smoke.mp3",
+  "start": 8.675,
+  "end": 9.995,
+  "dur": 1.3196,
+  "frames": 39.59,
+  "peak": -0.36
+ },
+ {
+  "file": "fire.mp3",
+  "start": 10.41,
+  "end": 11.905,
+  "dur": 1.495,
+  "frames": 44.85,
+  "peak": -0.23
+ },
+ {
+  "file": "ak47.mp3",
+  "start": 12.88,
+  "end": 13.345,
+  "dur": 0.465,
+  "frames": 13.95,
+  "peak": -0.45
+ },
+ {
+  "file": "gailar.mp3",
+  "start": 13.62,
+  "end": 14.145,
+  "dur": 0.525,
+  "frames": 15.75,
+  "peak": -0.52
+ }
+]

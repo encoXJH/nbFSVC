@@ -10,6 +10,7 @@ import { buildSiteCanvases, createGround, createSky, createSea, createHills, cre
 import { createConstruction } from './construction.js';
 import { facadeTextures, loadTexture, setSeed } from './textures.js';
 import * as TL from './timeline.js';
+import { createGunMode } from './gun-mode.js';
 import { createVehicleMode } from './vehicle-mode.js';
 
 const W = window.innerWidth, H = window.innerHeight;
@@ -52,10 +53,25 @@ const siteLights = [[-60, 40, 120], [80, 40, -100], [-250, 40, 0], [300, 40, -50
 });
 
 let ready = false;
+let gameReady = false;
+let gunMode = null;
 let vehicleMode = null;
 let constr, trees, rain, sky, panoTex;
+const assetProgress = { audio: 0, vehicles: 0 };
+
+function updateLoading(percent, status) {
+  const value = Math.round(THREE.MathUtils.clamp(percent, 0, 100));
+  $('loader-bar').style.width = `${value}%`;
+  $('loader-progress').textContent = `${value}%`;
+  $('loader-status').textContent = status;
+}
+
+function updateAssetLoading(status) {
+  updateLoading(60 + assetProgress.audio * 20 + assetProgress.vehicles * 18, status);
+}
 
 async function init() {
+  updateLoading(4, '加载校园地形');
   const sat = await loadTexture('/assets/sat_ground.jpg');
   sat.flipY = false; sat.needsUpdate = true;
   const site = buildSiteCanvases();
@@ -64,12 +80,16 @@ async function init() {
   scene.add(createSea(U));
   scene.add(createHills());
   scene.add(createTown(facadeTextures('modern', 8, 0.15), U));
+  updateLoading(25, '生成校园植被');
   trees = await createTrees('/assets/sat.jpg'); scene.add(trees);
+  updateLoading(42, '构建校园设施');
   constr = createConstruction(U); scene.add(constr.root);
   rain = createRain(U); scene.add(rain);
+  updateLoading(50, '加载环境贴图');
   panoTex = await loadTexture('/assets/pano_aerial_front.jpg');
   panoTex.wrapS = THREE.RepeatWrapping;
   gradePass.uniforms.tPano.value = panoTex;
+  updateLoading(60, '初始化枪械与车辆');
   ready = true;
 }
 
@@ -291,7 +311,7 @@ function renderAt(t, updateCamera = true) {
   constr.update(day, t, { night });
   trees.userData.update(day, t);
 
-  if (updateCamera && !vehicleMode?.isDriving()) {
+  if (updateCamera && !gunMode?.isActive()) {
     const cam = window.camOverride ? { ...window.camOverride, pos: v3(window.camOverride.pos), tgt: v3(window.camOverride.tgt) } : sampleShot(t);
     camera.up.set(...(window.camOverride && window.camOverride.up ? window.camOverride.up : [0, 1, 0]));
     camera.position.copy(cam.pos);
@@ -309,7 +329,7 @@ function renderAt(t, updateCamera = true) {
   g.uSunUV.value.set(tmpV.x * 0.5 + 0.5, tmpV.y * 0.5 + 0.5);
   g.uSunVis.value = facing ? (1 - ov) * ss(el, -2, 3) * (1 - ss(el, 30, 50)) : 0;
   g.uTime.value = t;
-  g.uBar.value = window.camOverride || vehicleMode?.isDriving() ? 0 : BAR / H;
+  g.uBar.value = window.camOverride || gunMode?.isActive() ? 0 : BAR / H;
   g.uFade.value = 1 - ss(t, 0, 1.4);
   g.uPano.value = ss(t, TL.PANO.t0, TL.PANO.t1);
   g.uYaw.value = TL.PANO.yawDeg / 360;
@@ -322,13 +342,14 @@ function renderAt(t, updateCamera = true) {
   bloom.threshold = lerp(0.92, 0.75, night);
 
   composer.render();
+  gunMode?.renderViewModel();
   updateHUD(t, env);
   return true;
 }
 
 window.renderAt = renderAt;
 window.TL = TL;
-window.sceneReady = () => ready;
+window.sceneReady = () => gameReady;
 
 // 静态建成校园查看器：仅在加载完成或手动操作时重新渲染。
 const MODEL_TIME = 15;
@@ -336,7 +357,7 @@ window.envOverride = { day: 666, tod: 10, cloud: 0.3, rain: 0, wet: 0, fog: 0.00
 window.camOverride = { pos: [520, 340, 520], tgt: [40, 15, 0], fov: 42 };
 $('ui').style.display = 'none';
 
-init().then(() => {
+init().then(async () => {
   renderAt(MODEL_TIME);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.copy(v3(window.camOverride.tgt));
@@ -346,10 +367,23 @@ init().then(() => {
   controls.maxPolarAngle = Math.PI * 0.49;
   controls.update();
   controls.addEventListener('change', () => renderAt(MODEL_TIME, false));
-  vehicleMode = createVehicleMode({
+  const modeOptions = {
     scene, camera, renderer, controls,
     renderFrame: () => renderAt(MODEL_TIME, false),
+    canInteract: () => gameReady,
+  };
+  vehicleMode = createVehicleMode({
+    ...modeOptions,
+    onStateChange: (driving, menuOpen) => gunMode?.setVehicleActive(driving || menuOpen),
   });
+  gunMode = createGunMode({
+    ...modeOptions,
+    onLoadProgress: (loaded, total) => {
+      assetProgress.audio = loaded / total;
+      updateAssetLoading(`加载枪械与投掷物音效 ${loaded}/${total}`);
+    },
+  });
+  window.gunMode = gunMode;
   window.vehicleMode = vehicleMode;
 
   window.addEventListener('resize', () => {
@@ -360,7 +394,25 @@ init().then(() => {
     composer.setSize(w, h);
     renderAt(MODEL_TIME, false);
   });
-}).catch((e) => { console.error(e); window.initError = String(e.stack || e); });
+
+  await Promise.all([
+    gunMode.ready,
+    vehicleMode.preload((loaded, total) => {
+      assetProgress.vehicles = loaded / total;
+      updateAssetLoading(`加载高精度车辆模型 ${loaded}/${total}`);
+    }),
+  ]);
+  updateLoading(100, '游戏资源加载完成');
+  renderAt(MODEL_TIME, false);
+  gameReady = true;
+  $('game-loader').classList.add('done');
+}).catch((e) => {
+  console.error(e);
+  window.initError = String(e.stack || e);
+  $('game-loader').classList.add('failed');
+  $('loader-title').textContent = '资源加载失败';
+  $('loader-status').textContent = e.message || String(e);
+});
 
 
 
