@@ -47,7 +47,7 @@ function isBlocked(x, z) {
   return false;
 }
 
-export function createGunMode({ scene, camera, renderer, controls, renderFrame, onLoadProgress, canInteract = () => true, rangeOnly = false }) {
+export function createGunMode({ scene, camera, renderer, controls, renderFrame, onLoadProgress, canInteract = () => true, rangeOnly = false, world = null, onFire = null }) {
   const audio = new GunAudio();
   const grenades = createGrenadeSystem({ scene, camera, audio });
   const targetRange = rangeOnly ? createTargetSystem({ scene }) : null;
@@ -111,11 +111,18 @@ export function createGunMode({ scene, camera, renderer, controls, renderFrame, 
   let verticalVelocity = 0;
   let grounded = true;
   let crouching = false;
+  let currentGround = 0;
+  let climbing = null;
+  let ladderNear = null;
   const velocity = new THREE.Vector3();
 
-  if (rangeOnly) camera.position.copy(targetRange.spawn);
+  if (world) {
+    camera.position.fromArray(world.spawn.position);
+    yaw = world.spawn.yaw || 0;
+    currentGround = world.groundHeight(camera.position.x, camera.position.z, camera.position.y - STAND_EYE_HEIGHT);
+  } else if (rangeOnly) camera.position.copy(targetRange.spawn);
   else camera.position.set(SPAWN.x, STAND_EYE_HEIGHT, SPAWN.z);
-  camera.rotation.set(0, 0, 0, 'YXZ');
+  camera.rotation.set(pitch, yaw, 0, 'YXZ');
   camera.fov = DEFAULT_FOV;
   camera.near = .08;
   camera.updateProjectionMatrix();
@@ -276,9 +283,13 @@ export function createGunMode({ scene, camera, renderer, controls, renderFrame, 
   function makeTracer(now) {
     const origin = camera.getWorldPosition(new THREE.Vector3());
     const direction = camera.getWorldDirection(new THREE.Vector3());
-    const hit = targetRange?.shoot(origin, direction, currentId);
+    const hit = targetRange
+      ? targetRange.shoot(origin, direction, currentId)
+      : onFire?.({ origin: origin.toArray(), direction: direction.toArray(), weaponId: currentId });
     const start = origin.clone().addScaledVector(direction, .7);
-    const end = hit ? hit.point : origin.clone().addScaledVector(direction, 120);
+    const end = hit?.point
+      ? (hit.point.isVector3 ? hit.point : new THREE.Vector3(...hit.point))
+      : origin.clone().addScaledVector(direction, 120);
     const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
     const material = new THREE.LineBasicMaterial({ color: 0xffd47a, transparent: true, opacity: .72 });
     const line = new THREE.Line(geometry, material);
@@ -350,6 +361,38 @@ export function createGunMode({ scene, camera, renderer, controls, renderFrame, 
     const length = Math.hypot(forwardInput, rightInput) || 1;
     const sprinting = keys.has('ShiftLeft') || keys.has('ShiftRight');
     const speed = crouching ? 2.8 : sprinting ? 8 : 5.2;
+    eyeHeight = THREE.MathUtils.damp(eyeHeight, crouching ? CROUCH_EYE_HEIGHT : STAND_EYE_HEIGHT, 14, dt);
+    const feetY = currentGround + jumpOffset;
+    ladderNear = world?.getLadder(camera.position.x, feetY, camera.position.z) || null;
+    const ladderHint = $('ladder-hint');
+    if (!climbing && ladderNear && forwardInput !== 0) {
+      climbing = ladderNear;
+      currentGround = feetY;
+      jumpOffset = 0;
+      verticalVelocity = 0;
+      grounded = false;
+      velocity.set(0, 0, 0);
+    }
+    if (climbing) {
+      currentGround = THREE.MathUtils.clamp(currentGround + forwardInput * 2.5 * dt, climbing.bottom, climbing.top);
+      camera.position.x = THREE.MathUtils.damp(camera.position.x, climbing.x, 14, dt);
+      camera.position.z = THREE.MathUtils.damp(camera.position.z, climbing.z, 14, dt);
+      if (currentGround >= climbing.top && forwardInput > 0) {
+        camera.position.x = climbing.exit[0];
+        camera.position.z = climbing.exit[2];
+        currentGround = climbing.top;
+        grounded = true;
+        climbing = null;
+      } else if (currentGround <= climbing.bottom && forwardInput < 0) {
+        currentGround = climbing.bottom;
+        grounded = true;
+        climbing = null;
+      }
+      camera.position.y = currentGround + eyeHeight;
+      if (ladderHint) ladderHint.hidden = false;
+      return;
+    }
+
     const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
     const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
     const desired = forward.multiplyScalar(forwardInput / length).add(right.multiplyScalar(rightInput / length)).multiplyScalar(speed);
@@ -359,29 +402,72 @@ export function createGunMode({ scene, camera, renderer, controls, renderFrame, 
     const oldZ = camera.position.z;
     const nextX = oldX + velocity.x * dt;
     const nextZ = oldZ + velocity.z * dt;
-    const blocked = rangeOnly ? targetRange.isBlocked : isBlocked;
+    const blocked = world
+      ? (x, z) => world.isBlocked(x, z, currentGround + jumpOffset)
+      : rangeOnly ? targetRange.isBlocked : isBlocked;
     if (!blocked(nextX, oldZ)) camera.position.x = nextX;
     else velocity.x = 0;
     if (!blocked(camera.position.x, nextZ)) camera.position.z = nextZ;
     else velocity.z = 0;
+
+    let floor = world ? world.groundHeight(camera.position.x, camera.position.z, currentGround + jumpOffset) : 0;
+    if (grounded) {
+      if (floor < currentGround - .2) {
+        grounded = false;
+        verticalVelocity = 0;
+      } else {
+        currentGround = floor;
+        jumpOffset = 0;
+      }
+    }
     if (!grounded) {
       verticalVelocity -= GRAVITY * dt;
       jumpOffset += verticalVelocity * dt;
-      if (jumpOffset <= 0) {
+      floor = world ? world.groundHeight(camera.position.x, camera.position.z, currentGround + jumpOffset) : 0;
+      if (jumpOffset <= 0 && currentGround + jumpOffset <= floor && verticalVelocity <= 0) {
+        currentGround = floor;
         jumpOffset = 0;
         verticalVelocity = 0;
         grounded = true;
       }
     }
-    eyeHeight = THREE.MathUtils.damp(eyeHeight, crouching ? CROUCH_EYE_HEIGHT : STAND_EYE_HEIGHT, 14, dt);
-    camera.position.y = eyeHeight + jumpOffset;
+    camera.position.y = currentGround + jumpOffset + eyeHeight;
     bobTime += Math.hypot(velocity.x, velocity.z) * dt * 1.4;
+    if (ladderHint) ladderHint.hidden = !ladderNear;
   }
 
   function jump() {
-    if (menuOpen || !grounded) return;
+    if (menuOpen) return;
+    if (climbing) {
+      climbing = null;
+      grounded = false;
+      verticalVelocity = 3.2;
+      return;
+    }
+    if (!grounded) return;
     grounded = false;
     verticalVelocity = JUMP_SPEED;
+  }
+
+  function clearInput() {
+    keys.clear();
+    firing = false;
+    velocity.set(0, 0, 0);
+  }
+
+  function teleport(spawn) {
+    clearInput();
+    camera.position.fromArray(spawn.position);
+    yaw = spawn.yaw || 0;
+    pitch = spawn.pitch || 0;
+    currentGround = world ? world.groundHeight(camera.position.x, camera.position.z, camera.position.y - STAND_EYE_HEIGHT) : 0;
+    jumpOffset = 0;
+    verticalVelocity = 0;
+    grounded = true;
+    climbing = null;
+    ladderNear = null;
+    eyeHeight = STAND_EYE_HEIGHT;
+    camera.rotation.set(pitch, yaw, 0, 'YXZ');
   }
 
   function updateViewModel(dt, now) {
@@ -488,7 +574,7 @@ export function createGunMode({ scene, camera, renderer, controls, renderFrame, 
       return;
     }
     if (menuOpen) return;
-    if (event.code === 'Digit4') {
+    if (event.code === 'Digit4' && !world) {
       event.preventDefault();
       if (!event.repeat) cycleThrowable();
       return;
@@ -556,6 +642,8 @@ export function createGunMode({ scene, camera, renderer, controls, renderFrame, 
     isActive: () => true,
     isRangeActive: () => rangeOnly,
     setVehicleActive,
+    clearInput,
+    teleport,
     selectWeapon,
     cycleThrowable,
     throwEquipped,
@@ -563,7 +651,8 @@ export function createGunMode({ scene, camera, renderer, controls, renderFrame, 
     reload: startReload,
     getState: () => ({
       active: true,
-      pointerLocked, menuOpen, vehicleActive, rangeActive: rangeOnly, grounded, crouching, jumpOffset, eyeHeight, previewWeapon: previewId,
+      pointerLocked, menuOpen, vehicleActive, rangeActive: rangeOnly, grounded, crouching, jumpOffset, eyeHeight,
+      ground: currentGround, climbing: climbing?.id || null, ladderNear: ladderNear?.id || null, previewWeapon: previewId,
       position: camera.position.toArray(),
       yaw, pitch, fov: camera.fov,
       equipped,

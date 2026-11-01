@@ -79,7 +79,7 @@ export function createTargetSystem({ scene }) {
     document.getElementById('range-hits').textContent = `${hits} 命中 · ${destroyed} 击毁`;
   }
 
-  function addTarget(x, z) {
+  function addTarget(x, z, moving = false) {
     const group = new THREE.Group();
     group.position.set(x, 0, z);
     const base = new THREE.Mesh(new THREE.BoxGeometry(.8, .1, .55), materials.stand);
@@ -100,7 +100,13 @@ export function createTargetSystem({ scene }) {
       group.add(disc);
       discs.push(disc);
     }
-    const target = { group, discs, health: 3, active: true, wobble: 0, respawnAt: 0 };
+    const target = {
+      group, discs, health: 3, active: true, wobble: 0, respawnAt: 0,
+      baseX: x,
+      moveRange: moving ? 1.25 : 0,
+      moveSpeed: moving ? .9 + (-z) / 80 : 0,
+      movePhase: moving ? x * .5 - z * .12 : 0,
+    };
     for (const disc of discs) {
       disc.userData.target = target;
       hitMeshes.push(disc);
@@ -133,6 +139,7 @@ export function createTargetSystem({ scene }) {
       target.active = true;
       target.wobble = 0;
       target.respawnAt = 0;
+      target.group.position.x = target.baseX;
       target.group.rotation.set(0, 0, 0);
     }
     syncHUD();
@@ -191,6 +198,7 @@ export function createTargetSystem({ scene }) {
     if (now >= hitMarkerUntil) document.getElementById('hit-marker').hidden = true;
     for (const target of targets) {
       if (target.active) {
+        if (target.moveRange) target.group.position.x = target.baseX + Math.sin(now * target.moveSpeed + target.movePhase) * target.moveRange;
         target.wobble = THREE.MathUtils.damp(target.wobble, 0, 8, dt);
         target.group.rotation.z = Math.sin(now * 28) * target.wobble * .055;
       } else {
@@ -227,7 +235,7 @@ export function createTargetSystem({ scene }) {
 
   buildArena();
   for (const distance of DISTANCES) {
-    for (const lane of LANES) addTarget(lane, 8 - distance);
+    for (const lane of LANES) addTarget(lane, 8 - distance, distance >= 38);
   }
   syncHUD();
 
@@ -243,6 +251,7 @@ export function createTargetSystem({ scene }) {
       targets: targets.map((target) => ({
         health: target.health,
         active: target.active,
+        moving: target.moveRange > 0,
         position: [target.group.position.x, TARGET_HEIGHT, target.group.position.z],
       })),
     }),
