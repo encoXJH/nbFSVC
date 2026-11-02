@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { VEHICLES, VEHICLE_BY_ID } from './vehicle-catalog.js';
 import { buildGenericVehicle, loadDetailedVehicles } from './vehicle-models.js';
-import { handlingFor, resetDynamics, updateDynamics } from './vehicle-dynamics.js';
+import { handlingFor, resetDynamics, updateDynamics, SIM_TIME_SCALE } from './vehicle-dynamics.js';
 import { BUILDINGS, SAT, SITE, MPP, U0, ux, uz } from './layout.js';
 import { coastX } from './world.js';
 
@@ -276,7 +276,7 @@ export function createVehicleMode({ scene, camera, renderer, controls, renderFra
   }
 
   function updateHUD() {
-    $('drive-speed').firstChild.nodeValue = String(Math.round(Math.abs(active.speed) * 3.6));
+    $('drive-speed').firstChild.nodeValue = String(Math.round(Math.abs(active.speed) * 3.6 * SIM_TIME_SCALE));
     const degrees = Math.round(Math.abs(active.slip) * 180 / Math.PI);
     $('drive-state').textContent = active.drifting ? `漂移 ${degrees}°`
       : keys.has('Space') ? '手刹制动' : active.speed > .15 ? '前進' : active.speed < -.15 ? '倒車' : '待命';
@@ -299,10 +299,11 @@ export function createVehicleMode({ scene, camera, renderer, controls, renderFra
       active.object.rotation.y = -active.heading;
       const lean = active.entry.spec.twoWheeler ? -active.steer * Math.min(1, Math.abs(active.speed) / 16) * .22 : 0;
       active.object.rotation.z = THREE.MathUtils.damp(active.object.rotation.z, lean, 7, dt);
+      const spinDt = dt * SIM_TIME_SCALE;
       for (const wheel of active.object.userData.wheels || []) {
         const wheelSpeed = input.handbrake && !wheel.steering ? 0 : active.speed;
-        wheel.tire.rotation.x -= wheelSpeed / wheel.radius * dt;
-        wheel.hub.rotation.x -= wheelSpeed / wheel.radius * dt;
+        wheel.tire.rotation.x -= wheelSpeed / wheel.radius * spinDt;
+        wheel.hub.rotation.x -= wheelSpeed / wheel.radius * spinDt;
         if (wheel.steering) wheel.pivot.rotation.y = -active.wheelAngle;
       }
       updateHUD();

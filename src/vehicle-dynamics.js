@@ -1,5 +1,12 @@
 import * as THREE from 'three';
 
+// 校园按真实米制搭建（操场直道 / 弯道各约 100m），车辆仿真整体放慢到 0.7 倍。
+export const SIM_TIME_SCALE = .7;
+// 街机式加速：前段保持强推力，接近极速才快速衰减。
+export const THROTTLE_PULL = 2.8;
+// 刹车同样走街机手感，制动距离压到接近真实性能车。
+export const BRAKE_BOOST = 2.5;
+
 export function handlingFor(entry) {
   const spec = entry.spec;
   const tune = entry.tune || {};
@@ -7,19 +14,19 @@ export function handlingFor(entry) {
   const maxSpeed = spec.maxKmh / 3.6;
   return {
     accel: spec.accel,
-    brake: spec.brake,
+    brake: spec.brake * BRAKE_BOOST,
     grip: spec.grip,
     wheelbase: spec.wheelbase,
     maxSpeed,
     drifty,
     driftGrip: 1.9 / (drifty > 1 ? Math.sqrt(drifty) : 1),
     handbrakeGrip: .9,
-    latAccel: 10.5 * (tune.grip || 1),
-    yawResp: 8,
+    latAccel: 50 * (tune.grip || 1),
+    yawResp: 18,
     reverseMax: 9,
-    maxSteer: .6,
-    maxSteerHigh: .14,
-    drag: Math.max(5e-5, (spec.accel * (1 - (1.02 / 1.14) ** 2.2) - .3) / (1.02 * maxSpeed) ** 2),
+    maxSteer: .7,
+    maxSteerHigh: .32,
+    drag: Math.max(5e-5, (spec.accel * (1 - (1 / 1.14) ** 2.2) - .3) / maxSpeed ** 2),
   };
 }
 
@@ -42,7 +49,11 @@ export function resetDynamics(state, x, z, heading = 0) {
 function updateBikeDrive(state, input, dt) {
   const spec = state.entry.spec;
   const maxSpeed = spec.maxKmh / 3.6;
-  if (input.throttle) state.speed += spec.accel * dt;
+  if (input.throttle) {
+    const ratio = THREE.MathUtils.clamp(Math.max(0, state.speed) / maxSpeed, 0, 1.2);
+    const pull = THROTTLE_PULL * (1 - Math.min(1, ratio) ** 6);
+    state.speed += spec.accel * pull * dt;
+  }
   if (input.brake) {
     if (state.speed > .5) state.speed -= spec.brake * dt;
     else state.speed -= spec.accel * .62 * dt;
@@ -84,8 +95,9 @@ function stepCar(state, input, dt) {
     if (u < -.6) {
       force = h.brake * .8;
     } else {
-      const ratio = THREE.MathUtils.clamp(u / (1.14 * h.maxSpeed), 0, 1.2);
-      force = h.accel * Math.max(0, 1 - ratio ** 2.2)
+      const ratio = THREE.MathUtils.clamp(u / h.maxSpeed, 0, 1.3);
+      const pull = THROTTLE_PULL * (1 - Math.min(1, ratio) ** 6);
+      force = h.accel * pull
         * (1 + .35 * Math.max(0, 1 - f / 7)) * (state.drifting ? .55 : 1);
     }
   }
@@ -94,7 +106,11 @@ function stepCar(state, input, dt) {
   }
   let brakeForce = input.brake && u > .6 ? h.brake : 0;
   if (input.handbrake) {
-    brakeForce = Math.max(brakeForce, f > .2 ? (state.drifting ? 2.5 : 5) : 20);
+    const straight = Math.abs(state.steer) < .2;
+    const handbrakeForce = f > .2
+      ? h.brake * (state.drifting ? .22 : straight ? .75 : .4)
+      : 20;
+    brakeForce = Math.max(brakeForce, handbrakeForce);
     if (f > .5) brakeForce = Math.min(brakeForce, 1.02 * h.brake);
   }
   const rollingDrag = .3 + (input.throttle ? 0 : 1.2) + h.drag * f * f;
@@ -167,7 +183,8 @@ function updateCarDrive(state, input, dt) {
 }
 
 export function updateDynamics(state, input, dt) {
-  const steerResponse = input.steer === 0 || input.steer * state.steer < 0 ? 10 : 6;
+  dt *= SIM_TIME_SCALE;
+  const steerResponse = (input.steer === 0 || input.steer * state.steer < 0 ? 14 : 8) / SIM_TIME_SCALE;
   state.steer = THREE.MathUtils.damp(state.steer, input.steer, steerResponse, dt);
   state.powerT = input.throttle && Math.abs(state.steer) > .85 ? state.powerT + dt : 0;
   if (state.entry.spec.twoWheeler) updateBikeDrive(state, input, dt);

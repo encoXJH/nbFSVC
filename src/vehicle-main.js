@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VEHICLES, VEHICLE_BY_ID } from './vehicle-catalog.js';
 import { buildGenericVehicle, loadDetailedVehicles } from './vehicle-models.js';
-import { handlingFor, resetDynamics, updateDynamics } from './vehicle-dynamics.js';
+import { handlingFor, resetDynamics, updateDynamics, SIM_TIME_SCALE, THROTTLE_PULL, BRAKE_BOOST } from './vehicle-dynamics.js';
 const $ = (id) => document.getElementById(id);
 const host = $('renderer-host');
 const scene = new THREE.Scene();
@@ -192,9 +192,9 @@ function updateVehiclePanel(entry) {
   const spec = entry.spec;
   const rows = [
     ['类型', groupName(entry.group)],
-    ['极速', `${spec.maxKmh} km/h`],
-    ['加速度', `${spec.accel.toFixed(1)} m/s²`],
-    ['制动', `${spec.brake.toFixed(1)} m/s²`],
+    ['极速', `${Math.round(spec.maxKmh * SIM_TIME_SCALE)} km/h`],
+    ['初段加速', `${(spec.accel * THROTTLE_PULL * SIM_TIME_SCALE).toFixed(1)} m/s²`],
+    ['制动', `${(spec.brake * BRAKE_BOOST * SIM_TIME_SCALE).toFixed(1)} m/s²`],
     ['尺寸', `${spec.l.toFixed(2)} × ${spec.w.toFixed(2)} m`],
     ['质量', `${spec.mass} kg`],
   ];
@@ -317,13 +317,14 @@ function updateDrive(dt) {
   const lean = spec.twoWheeler ? -active.steer * Math.min(1, Math.abs(active.speed) / 16) * .22 : 0;
   active.object.rotation.z = THREE.MathUtils.damp(active.object.rotation.z, lean, 7, dt);
 
+  const spinDt = dt * SIM_TIME_SCALE;
   for (const wheel of active.object.userData.wheels || []) {
     const wheelSpeed = input.handbrake && !wheel.steering ? 0 : active.speed;
-    wheel.tire.rotation.x -= wheelSpeed / wheel.radius * dt;
-    wheel.hub.rotation.x -= wheelSpeed / wheel.radius * dt;
+    wheel.tire.rotation.x -= wheelSpeed / wheel.radius * spinDt;
+    wheel.hub.rotation.x -= wheelSpeed / wheel.radius * spinDt;
     if (wheel.steering) wheel.pivot.rotation.y = -active.wheelAngle;
   }
-  $('speed-value').textContent = String(Math.round(Math.abs(active.speed) * 3.6));
+  $('speed-value').textContent = String(Math.round(Math.abs(active.speed) * 3.6 * SIM_TIME_SCALE));
   const driftDegrees = Math.round(Math.abs(active.slip) * 180 / Math.PI);
   $('drive-state').textContent = active.drifting ? `漂移 ${driftDegrees}°`
     : input.handbrake ? '手刹制动' : active.speed > .15 ? '前進' : active.speed < -.15 ? '倒車' : '待命';
